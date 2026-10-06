@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+
+# Artefacts générés (cf. ADR-0002) et données locales (cf. ADR-0001)
+artifacts/
+data/
