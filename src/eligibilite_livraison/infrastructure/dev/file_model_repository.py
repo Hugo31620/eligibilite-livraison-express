@@ -4,9 +4,10 @@ Disposition : ``<racine>/<version>/model.joblib`` + ``<racine>/<version>/metadat
 Une version publiée est immuable.
 """
 
+import hashlib
 import json
 import shutil
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -32,7 +33,7 @@ class FileModelRepository(ModelRepository):
     def __init__(self, root: Path) -> None:
         self._root = Path(root)
 
-    def save(self, artifact: ModelArtifact) -> None:
+    def save(self, artifact: ModelArtifact) -> ModelMetadata:
         version = artifact.metadata.model_version
         target = self._version_dir(version)
         if target.exists():
@@ -47,14 +48,16 @@ class FileModelRepository(ModelRepository):
         staging.mkdir(parents=True)
         try:
             joblib.dump(artifact.pipeline, staging / MODEL_FILENAME)
+            metadata = replace(artifact.metadata, model_sha256=_sha256(staging / MODEL_FILENAME))
             (staging / METADATA_FILENAME).write_text(
-                json.dumps(_metadata_to_dict(artifact.metadata), indent=2, ensure_ascii=False),
+                json.dumps(_metadata_to_dict(metadata), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
             staging.rename(target)
         except BaseException:
             shutil.rmtree(staging, ignore_errors=True)
             raise
+        return metadata
 
     def load(self, version: str) -> ModelArtifact:
         directory = self._version_dir(version)
@@ -67,6 +70,7 @@ class FileModelRepository(ModelRepository):
             )
         try:
             metadata = _metadata_from_dict(json.loads(metadata_path.read_text(encoding="utf-8")))
+            _verify_integrity(model_path, metadata)
             pipeline = joblib.load(model_path)
         except Exception as error:  # noqa: BLE001 - un pickle corrompu peut lever n'importe quoi
             raise ModelUnavailableError(
@@ -77,6 +81,25 @@ class FileModelRepository(ModelRepository):
     def _version_dir(self, version: str) -> Path:
         # La version devient un nom de dossier : le format X.Y.Z interdit "../" et consorts.
         return self._root / ensure_valid_model_version(version)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_integrity(model_path: Path, metadata: ModelMetadata) -> None:
+    """Un pickle altéré exécuterait du code au chargement : on vérifie AVANT ``joblib.load``.
+
+    Les artefacts antérieurs à cette vérification (sans empreinte) restent lisibles.
+    """
+    if metadata.model_sha256 is not None and _sha256(model_path) != metadata.model_sha256:
+        raise ModelUnavailableError(
+            f"Empreinte de {model_path.name} différente de metadata.json : artefact altéré."
+        )
 
 
 def _metadata_to_dict(metadata: ModelMetadata) -> dict:

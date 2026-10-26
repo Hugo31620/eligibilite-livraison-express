@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from eligibilite_livraison.abstractions.order_store import OrderStore
 from eligibilite_livraison.config import Settings
 from eligibilite_livraison.infrastructure.factory import build_infrastructure
+from eligibilite_livraison.services.authentication import AuthenticationService
 from eligibilite_livraison.services.orders import OrderCollectionService
 from eligibilite_livraison.services.predictor import PredictorProvider
 
@@ -15,6 +16,7 @@ class AppContainer:
     order_store: OrderStore
     orders: OrderCollectionService
     predictors: PredictorProvider
+    authentication: AuthenticationService
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -29,4 +31,5 @@ def build_container(settings: Settings | None = None) -> AppContainer:
             settings.model_version,
             settings.prediction_threshold,
         ),
+        authentication=AuthenticationService(infrastructure.api_key_store),
     )

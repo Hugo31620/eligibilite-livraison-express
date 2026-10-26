@@ -38,3 +38,17 @@ def test_invalid_threshold_is_rejected(threshold):
 def test_invalid_model_version_is_rejected(version):
     with pytest.raises(InvalidModelVersionError):
         Settings.from_env({"MODEL_VERSION": version})
+
+
+def test_security_settings():
+    settings = Settings.from_env(
+        {"API_KEYS_FILE": "/run/secrets/keys.json", "EXPOSE_API_DOCS": "false"}
+    )
+    assert settings.api_keys_file == Path("/run/secrets/keys.json")
+    assert settings.expose_api_docs is False
+    assert Settings.from_env({}).expose_api_docs is True
+
+
+def test_invalid_boolean_is_rejected():
+    with pytest.raises(ConfigurationError):
+        Settings.from_env({"EXPOSE_API_DOCS": "peut-etre"})

@@ -16,6 +16,8 @@ class Settings:
     artifacts_dir: Path = Path("artifacts")
     orders_db_path: Path = Path("data/orders.db")
     prediction_threshold: float = 0.5
+    api_keys_file: Path = Path("secrets/api_keys.json")
+    expose_api_docs: bool = True
 
     def __post_init__(self) -> None:
         ensure_valid_model_version(self.model_version)
@@ -36,4 +38,19 @@ class Settings:
             artifacts_dir=Path(environ.get("ARTIFACTS_DIR", defaults.artifacts_dir)),
             orders_db_path=Path(environ.get("ORDERS_DB_PATH", defaults.orders_db_path)),
             prediction_threshold=threshold,
+            api_keys_file=Path(environ.get("API_KEYS_FILE", defaults.api_keys_file)),
+            expose_api_docs=_parse_bool(
+                environ.get("EXPOSE_API_DOCS"), defaults.expose_api_docs, "EXPOSE_API_DOCS"
+            ),
         )
+
+
+def _parse_bool(value: str | None, default: bool, name: str) -> bool:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigurationError(f"{name} doit valoir true ou false.")

@@ -31,6 +31,7 @@ class ModelMetadata:
     metrics: dict[str, float]
     training_rows: int
     test_rows: int
+    model_sha256: str | None = None  # empreinte de model.joblib, vérifiée avant chargement
 
 
 @dataclass(frozen=True)

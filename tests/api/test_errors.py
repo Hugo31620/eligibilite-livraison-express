@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from eligibilite_livraison.api.app import create_app
+from tests.api.conftest import headers_for
 
 
 def test_unexpected_error_is_hidden_behind_a_500(container, valid_order, monkeypatch):
@@ -8,7 +9,9 @@ def test_unexpected_error_is_hidden_behind_a_500(container, valid_order, monkeyp
         raise RuntimeError("détail interne confidentiel")
 
     monkeypatch.setattr(container.orders, "collect", boom)
-    client = TestClient(create_app(container), raise_server_exceptions=False)
+    client = TestClient(
+        create_app(container), raise_server_exceptions=False, headers=headers_for("user")
+    )
 
     response = client.post("/v1/orders", json=valid_order)
 

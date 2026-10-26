@@ -66,9 +66,9 @@ class TrainingService:
             training_rows=len(x_train),
             test_rows=len(x_test),
         )
-        self._model_writer.save(ModelArtifact(pipeline=pipeline, metadata=metadata))
+        saved = self._model_writer.save(ModelArtifact(pipeline=pipeline, metadata=metadata))
         logger.info("Modèle %s enregistré (metrics=%s)", model_version, metrics)
-        return metadata
+        return saved
 
     def _load_clean_orders(self) -> pd.DataFrame:
         raw = self._dataset_source.load()

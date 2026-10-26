@@ -10,7 +10,7 @@ import pandas as pd
 from eligibilite_livraison.abstractions.model_repository import ModelReader
 from eligibilite_livraison.domain.errors import ModelUnavailableError
 from eligibilite_livraison.domain.features import FEATURE_COLUMNS
-from eligibilite_livraison.domain.model_artifact import ModelArtifact
+from eligibilite_livraison.domain.model_artifact import ModelArtifact, ModelMetadata
 from eligibilite_livraison.domain.order import OrderFeatures, new_order_id
 from eligibilite_livraison.domain.prediction import Prediction
 
@@ -27,22 +27,46 @@ class EligibilityPredictor:
                 "avec les variables attendues par l'application."
             )
         self._pipeline = artifact.pipeline
-        self._model_version = artifact.metadata.model_version
+        self._metadata = artifact.metadata
         self._threshold = threshold
 
+    @property
+    def metadata(self) -> ModelMetadata:
+        return self._metadata
+
+    @property
+    def threshold(self) -> float:
+        return self._threshold
+
     def predict(self, order: OrderFeatures) -> Prediction:
+        return self.predict_many([order])[0]
+
+    def predict_many(self, orders: list[OrderFeatures]) -> list[Prediction]:
+        """Prédiction vectorisée d'un lot (cellule batch du notebook), dans l'ordre reçu."""
         started = time.perf_counter()
-        frame = pd.DataFrame([order.feature_values()], columns=list(FEATURE_COLUMNS))
-        probability = float(self._pipeline.predict_proba(frame)[0, 1])
+        frame = pd.DataFrame(
+            [order.feature_values() for order in orders], columns=list(FEATURE_COLUMNS)
+        )
+        probabilities = self._pipeline.predict_proba(frame)[:, 1]
+        predicted_at = datetime.now(timezone.utc)
+        latency_ms = round((time.perf_counter() - started) * 1000 / len(orders), 3)
+        return [
+            self._to_prediction(order, float(probability), predicted_at, latency_ms)
+            for order, probability in zip(orders, probabilities)
+        ]
+
+    def _to_prediction(
+        self, order: OrderFeatures, probability: float, predicted_at: datetime, latency_ms: float
+    ) -> Prediction:
         eligible = probability >= self._threshold
         return Prediction(
             order_id=order.order_id or new_order_id(),
             express_eligible=eligible,
             decision="oui" if eligible else "non",
             probability=round(probability, 4),
-            model_version=self._model_version,
-            predicted_at=datetime.now(timezone.utc),
-            latency_ms=round((time.perf_counter() - started) * 1000, 3),
+            model_version=self._metadata.model_version,
+            predicted_at=predicted_at,
+            latency_ms=latency_ms,
         )
 
 

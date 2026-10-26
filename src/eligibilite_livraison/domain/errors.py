@@ -45,3 +45,19 @@ class ModelUnavailableError(DomainError):
 
 class ModelNotFoundError(ModelUnavailableError):
     code = "model_not_found"
+
+
+class AuthenticationError(DomainError):
+    """Clé d'API absente, inconnue ou expirée (HTTP 401)."""
+
+    code = "unauthorized"
+
+
+class PermissionDeniedError(DomainError):
+    """Clé valide, mais rôle insuffisant pour l'opération (HTTP 403)."""
+
+    code = "forbidden"
+
+
+class ApiKeyAlreadyExistsError(DomainError):
+    code = "api_key_already_exists"

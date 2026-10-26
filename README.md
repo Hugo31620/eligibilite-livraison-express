@@ -1,8 +1,11 @@
 # eligibilite-livraison-express
 
 API qui prédit si une commande peut être **livrée en express dans la journée**.
-TP « Industrialisation de l'IA dans le cloud » (YNOV M2 Data & IA) — **Étape 1 : transformer un
-notebook en application**.
+TP « Industrialisation de l'IA dans le cloud » (YNOV M2 Data & IA) :
+
+- **Séance 1** : transformer le notebook en application.
+- **Séance 2** : finir l'application, sécuriser l'accès par rôles et rédiger les ADR de
+  déploiement.
 
 Le notebook d'origine (`project_test_v1_final_final2.ipynb`) génère des données, les nettoie,
 entraîne une régression logistique et prédit. Ici, chaque responsabilité a son module, son
@@ -19,23 +22,54 @@ python -m venv .venv                          # python3 -m venv .venv
 pip install -e ".[dev]"
 
 express-train                                 # 1. entraîne et enregistre artifacts/1.0.0/
-uvicorn eligibilite_livraison.api.app:create_app --factory --reload   # 2. lance l'API
-pytest                                        # 3. lance les tests
+express-apikey create --name hugo --role admin --days 30   # 2. crée une clé (affichée UNE fois)
+uvicorn eligibilite_livraison.api.app:create_app --factory --reload   # 3. lance l'API
+pytest                                        # 4. lance les tests
 ```
 
-Documentation interactive : <http://localhost:8000/docs>.
+Documentation interactive (en dev uniquement) : <http://localhost:8000/docs>. Pour essayer les
+routes protégées depuis cette page, cliquer sur **Authorize** et coller la clé.
 
 Exemple d'appel :
 
 ```powershell
+$headers = @{ "X-API-Key" = "sk_dev_..." }   # la clé affichée par express-apikey
 $order = @{ hour=14; day_of_week=2; weekend=0; distance_km=3.5; order_value_eur=89.9; weight_kg=2.4;
             stock_available=1; preparation_time_min=18; carrier_capacity=0.85; weather="normal";
             delivery_zone="centre"; customer_type="premium" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/v1/predictions -Body $order -ContentType "application/json"
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/v1/predictions -Headers $headers -Body $order -ContentType "application/json"
 ```
 
 Configuration par variables d'environnement (voir `.env.example`) : `APP_ENV`, `MODEL_VERSION`,
-`ARTIFACTS_DIR`, `ORDERS_DB_PATH`, `PREDICTION_THRESHOLD`.
+`ARTIFACTS_DIR`, `ORDERS_DB_PATH`, `PREDICTION_THRESHOLD`, `API_KEYS_FILE`, `EXPOSE_API_DOCS`.
+
+### Avec Docker (topologie de production, ADR-0003 et ADR-0006)
+
+```powershell
+express-apikey create --name hugo --role user --days 30   # crée secrets/api_keys.json
+docker compose --profile train run --rm trainer          # entraîne le modèle dans le volume
+docker compose up -d --build                             # proxy nginx (:8080) + API (interne)
+curl http://localhost:8080/health
+```
+
+Seul le port **8080** du proxy est ouvert. L'API (8000) n'est joignable que depuis le
+réseau interne. `/docs` et `/openapi.json` n'existent pas.
+
+## Sécurité et rôles (ADR-0006, ADR-0007)
+
+| Route | Public | `guest` | `user` | `admin` |
+|---|:-:|:-:|:-:|:-:|
+| `GET /health`, `GET /health/ready` | ✅ | ✅ | ✅ | ✅ |
+| `GET /v1/model` | ❌ | ✅ | ✅ | ✅ |
+| `POST /v1/predictions`, `POST /v1/predictions/batch`, `POST /v1/orders` | ❌ | ❌ | ✅ | ✅ |
+| `GET /v1/orders/{id}` (données clients) | ❌ | ❌ | ❌ | ✅ |
+
+- Les clés sont envoyées dans l'en-tête `X-API-Key`. Elles expirent en **90 jours au
+  plus**.
+- On ne stocke que leur **empreinte SHA-256**, dans `secrets/` (hors Git) ou dans Key Vault
+  en cloud, jamais dans `.env`.
+- Gestion : `express-apikey create | list | revoke`. La révocation prend effet sans
+  redémarrage.
 
 ## Ce qui est livré (séance 1)
 
@@ -49,8 +83,21 @@ Configuration par variables d'environnement (voir `.env.example`) : `APP_ENV`, `
 | Sauvegarde du modèle | Dossier versionné et immuable `artifacts/<version>/` ([ADR-0002](docs/adr/ADR-0002-stockage-artefacts-modele.md)) — sera revue en séance 3 |
 | Sondes | `GET /health` (vivacité, sans dépendance) et `GET /health/ready` (modèle + stockage) |
 
-Volontairement **non fait** (YAGNI, contrat `x-session` > 1) : déploiement/CI-CD, MLflow,
-`/v1/model`, prédiction batch, historique des prédictions, flux temps réel, `/metrics`.
+## Ce qui est livré (séance 2)
+
+| Élément | Solution technique |
+|---|---|
+| Fin du portage du notebook | `GET /v1/model` (model card, cellule 55), `POST /v1/predictions/batch` (prédiction vectorisée, cellule 46) |
+| Accès par rôles `admin` / `user` / `guest` | Clés d'API nominatives, hachées, avec expiration, outil `express-apikey` ([ADR-0007](docs/adr/ADR-0007-securiser-acces-aux-donnees.md)) |
+| Blocage des ports, code non exposé | Reverse proxy nginx seul port ouvert, API interne, `/docs` coupé en prod, image sans sources annexes ([ADR-0006](docs/adr/ADR-0006-securiser-entrees-sorties.md)) |
+| Limitation de débit | nginx : 10 req/s par IP, rafale de 20, corps de 1 Mo maximum |
+| Intégrité du modèle | Empreinte SHA-256 vérifiée **avant** `joblib.load` |
+| Plateforme de déploiement | Image Docker non-root ([ADR-0003](docs/adr/ADR-0003-plateforme-de-deploiement.md)) |
+| Cloud / on-premise / local | Local en dev, Azure (France Central) en test et prod ([ADR-0004](docs/adr/ADR-0004-cloud-et-services.md)) |
+| Stratégie de déploiement | Blue/Green par révisions Azure Container Apps ([ADR-0005](docs/adr/ADR-0005-strategie-de-deploiement.md)) |
+
+Volontairement **non fait** (YAGNI) : CI/CD, adaptateurs Azure (`PostgresOrderStore`,
+`BlobModelRepository`), MLflow, historique des prédictions, flux temps réel, `/metrics`.
 La « mise en file d'attente » de `POST /v1/orders` n'est pas implémentée : la commande est
 persistée et acceptée (202) ; la file arrive avec le batch / temps réel (séances 5 et 6).
 
@@ -59,17 +106,19 @@ persistée et acceptée (202) ; la file arrive avec le batch / temps réel (séa
 ```text
 src/eligibilite_livraison/
 ├── domain/            # Cœur métier : OrderFeatures, Prediction, erreurs, liste des variables
-├── abstractions/      # Ports (ABC) : OrderStore, ModelReader/Writer, DatasetSource
+├── abstractions/      # Ports (ABC) : OrderStore, ModelReader/Writer, DatasetSource, ApiKeyStore
 ├── infrastructure/
-│   ├── dev/           # Adaptateurs locaux : SqliteOrderStore, FileModelRepository
+│   ├── dev/           # Adaptateurs locaux : SqliteOrderStore, FileModelRepository, JsonFileApiKeyStore
 │   └── factory.py     # Choix des adaptateurs selon APP_ENV  (futur : postgres/, ...)
 ├── data/              # SyntheticDatasetSource, règles qualité + nettoyage
 ├── ml/                # Pipeline sklearn, métriques, TrainingService
-├── services/          # EligibilityPredictor, PredictorProvider, OrderCollectionService
-├── api/               # App FastAPI, routes, schémas, gestion des erreurs
+├── services/          # EligibilityPredictor, PredictorProvider, OrderCollectionService,
+│                      # AuthenticationService, model card
+├── api/               # App FastAPI, routes, schémas, erreurs, contrôle d'accès (security.py)
 ├── container.py       # Racine de composition (assemble les briques)
 ├── config.py          # Settings depuis l'environnement
-└── cli.py             # express-train
+├── cli.py             # express-train
+└── apikey_cli.py      # express-apikey create / list / revoke
 ```
 
 Sens des dépendances : `api → services → abstractions ← infrastructure`, et tout le monde
@@ -85,7 +134,8 @@ connaît `domain`. L'API et les services ne savent jamais qu'il y a SQLite ou un
 | 22, 24, 26, 28 — split, pipeline, entraînement, métriques | `ml/training.py`, `ml/pipeline.py`, `ml/metrics.py` |
 | 34, 39 — prédiction et ses tests | `services/predictor.py` + `tests/` |
 | 41, 43 — sauvegarde / rechargement | `infrastructure/dev/file_model_repository.py` |
-| 55 — model card | `metadata.json` enregistré avec le modèle (la route `/v1/model` viendra en séance 3) |
+| 46 — prédiction batch | `EligibilityPredictor.predict_many` + `POST /v1/predictions/batch` |
+| 55 — model card | `services/model_card.py` + `GET /v1/model` |
 | 12, 30, 52, 53 — graphiques, exploration | Restent dans le notebook : c'est de l'expérimentation, pas de la production |
 
 ## Principes appliqués
@@ -118,9 +168,28 @@ connaît `domain`. L'API et les services ne savent jamais qu'il y a SQLite ou un
   nettoyait un jeu auquel il avait ajouté un doublon, ce qui changeait l'ordre des lignes avant
   le découpage entraînement/test.
 
+## Décisions d'architecture (ADR)
+
+| ADR | Décision |
+|---|---|
+| [0001](docs/adr/ADR-0001-stockage-commandes-clients.md) | Commandes dans SQLite en dev, puis PostgreSQL |
+| [0002](docs/adr/ADR-0002-stockage-artefacts-modele.md) | Artefacts du modèle dans un dossier versionné et immuable |
+| [0003](docs/adr/ADR-0003-plateforme-de-deploiement.md) | Plateforme : image Docker |
+| [0004](docs/adr/ADR-0004-cloud-et-services.md) | Local en dev, cloud Azure en test et prod, avec la liste des services |
+| [0005](docs/adr/ADR-0005-strategie-de-deploiement.md) | Stratégie Blue/Green, rollback instantané |
+| [0006](docs/adr/ADR-0006-securiser-entrees-sorties.md) | Sécurité des entrées et sorties : défense en profondeur |
+| [0007](docs/adr/ADR-0007-securiser-acces-aux-donnees.md) | Accès à la donnée : rôles et clés d'API |
+
 ## Tests
 
-`pytest` — 97 tests : validation du contrat de commande, qualité des données, entraînement de
-bout en bout, adaptateurs de stockage, API (succès, 404, 422, 503, 500) et **conformité de
-l'API générée avec `openapi.yml`** (`tests/api/test_contract.py`, limité aux opérations de la
-séance 1). Qualité du code : `ruff check .`
+`pytest` lance 169 tests :
+
+- validation du contrat de commande et qualité des données ;
+- entraînement de bout en bout et adaptateurs de stockage ;
+- intégrité du modèle (artefact altéré refusé) ;
+- API : succès, 401, 403, 404, 422, 503 et 500 ;
+- matrice complète **rôle × route** ;
+- model card et batch ;
+- **conformité de l'API générée avec `openapi.yml`** (`tests/api/test_contract.py`).
+
+Qualité du code : `ruff check .`

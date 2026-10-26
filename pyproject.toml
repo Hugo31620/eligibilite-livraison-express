@@ -28,13 +28,14 @@ dev = [
 
 [project.scripts]
 express-train = "eligibilite_livraison.cli:main"
+express-apikey = "eligibilite_livraison.apikey_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 filterwarnings = ["error::DeprecationWarning:eligibilite_livraison.*"]
 
 [tool.ruff]

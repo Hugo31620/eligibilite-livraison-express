@@ -20,11 +20,12 @@ def artifact(artifacts_dir):
 
 def test_save_then_load_round_trip(tmp_path, artifact):
     repository = FileModelRepository(tmp_path)
-    repository.save(artifact)
+    saved = repository.save(artifact)
 
     loaded = repository.load("1.0.0")
 
-    assert loaded.metadata == artifact.metadata
+    assert loaded.metadata == saved
+    assert saved.model_sha256 is not None
     assert (tmp_path / "1.0.0" / MODEL_FILENAME).is_file()
     assert (tmp_path / "1.0.0" / METADATA_FILENAME).is_file()
 
@@ -58,3 +59,33 @@ def test_corrupted_model_file_is_reported(tmp_path, artifact):
 def test_version_cannot_escape_the_root_directory(tmp_path, version):
     with pytest.raises(InvalidModelVersionError):
         FileModelRepository(tmp_path).load(version)
+
+
+def test_tampered_model_is_refused_before_unpickling(tmp_path, artifact, monkeypatch):
+    """Un pickle modifié exécuterait du code : il doit être rejeté sans être chargé."""
+    import joblib
+
+    repository = FileModelRepository(tmp_path)
+    repository.save(artifact)
+    model_path = tmp_path / "1.0.0" / MODEL_FILENAME
+    model_path.write_bytes(model_path.read_bytes() + b"\x00")
+
+    def must_not_be_called(*_args, **_kwargs):
+        raise AssertionError("joblib.load appelé sur un artefact altéré")
+
+    monkeypatch.setattr(joblib, "load", must_not_be_called)
+    with pytest.raises(ModelUnavailableError, match="altéré"):
+        repository.load("1.0.0")
+
+
+def test_legacy_artifact_without_fingerprint_is_still_readable(tmp_path, artifact):
+    import json
+
+    repository = FileModelRepository(tmp_path)
+    repository.save(artifact)
+    metadata_path = tmp_path / "1.0.0" / METADATA_FILENAME
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+    del data["model_sha256"]
+    metadata_path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert repository.load("1.0.0").metadata.model_sha256 is None

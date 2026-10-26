@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from eligibilite_livraison.domain.model_artifact import ModelArtifact
+from eligibilite_livraison.domain.model_artifact import ModelArtifact, ModelMetadata
 
 
 class ModelReader(ABC):
@@ -20,8 +20,11 @@ class ModelWriter(ABC):
     """Écriture des artefacts : réservée à l'entraînement."""
 
     @abstractmethod
-    def save(self, artifact: ModelArtifact) -> None:
+    def save(self, artifact: ModelArtifact) -> ModelMetadata:
         """Enregistre une nouvelle version, jamais en écrasant une existante.
+
+        Returns:
+            Les métadonnées réellement enregistrées (complétées de l'empreinte du modèle).
 
         Raises:
             ModelAlreadyExistsError: la version existe déjà.

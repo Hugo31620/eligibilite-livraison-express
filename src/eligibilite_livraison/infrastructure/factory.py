@@ -3,10 +3,12 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from eligibilite_livraison.abstractions.api_key_store import ApiKeyStore
 from eligibilite_livraison.abstractions.model_repository import ModelRepository
 from eligibilite_livraison.abstractions.order_store import OrderStore
 from eligibilite_livraison.config import Settings
 from eligibilite_livraison.domain.errors import ConfigurationError
+from eligibilite_livraison.infrastructure.dev.json_file_api_key_store import JsonFileApiKeyStore
 from eligibilite_livraison.infrastructure.dev.file_model_repository import FileModelRepository
 from eligibilite_livraison.infrastructure.dev.sqlite_order_store import SqliteOrderStore
 
@@ -15,12 +17,14 @@ from eligibilite_livraison.infrastructure.dev.sqlite_order_store import SqliteOr
 class Infrastructure:
     order_store: OrderStore
     model_repository: ModelRepository
+    api_key_store: ApiKeyStore
 
 
 def _build_dev(settings: Settings) -> Infrastructure:
     return Infrastructure(
         order_store=SqliteOrderStore(settings.orders_db_path),
         model_repository=FileModelRepository(settings.artifacts_dir),
+        api_key_store=JsonFileApiKeyStore(settings.api_keys_file),
     )
 
 

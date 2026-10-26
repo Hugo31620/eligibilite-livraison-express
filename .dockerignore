@@ -1,0 +1,18 @@
+# Rien d'autre que le code applicatif n'entre dans l'image (ADR-0006).
+.git
+.venv
+venv
+**/__pycache__
+*.egg-info
+.pytest_cache
+.ruff_cache
+tests
+docs
+deploy
+notebooks
+*.ipynb
+artifacts
+data
+secrets
+.env
+.env.*

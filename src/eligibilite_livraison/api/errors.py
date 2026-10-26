@@ -16,12 +16,21 @@ _STATUS_BY_ERROR: dict[type[errors.DomainError], int] = {
     errors.OrderNotFoundError: 404,
     errors.DuplicateOrderError: 422,
     errors.ModelUnavailableError: 503,
+    errors.AuthenticationError: 401,
+    errors.PermissionDeniedError: 403,
 }
+
+# RFC 9110 : une réponse 401 indique comment s'authentifier.
+_HEADERS_BY_STATUS = {401: {"WWW-Authenticate": 'APIKey header="X-API-Key"'}}
 
 
 def _error_response(status_code: int, error: str, message: str, details=None) -> JSONResponse:
     body = ErrorResponse(error=error, message=message, details=details)
-    return JSONResponse(status_code=status_code, content=body.model_dump(exclude_none=True))
+    return JSONResponse(
+        status_code=status_code,
+        content=body.model_dump(exclude_none=True),
+        headers=_HEADERS_BY_STATUS.get(status_code),
+    )
 
 
 def _status_for(error: errors.DomainError) -> int:

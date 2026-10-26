@@ -1,7 +1,7 @@
 """Compare l'API réellement générée par FastAPI avec le contrat ``openapi.yml`` fourni.
 
-Seules les opérations de la séance 1 sont attendues (``x-session``) : on ne vérifie pas
-ce qui n'est pas encore livré.
+On vérifie les opérations de la séance 1 (``x-session: 1``) et celles livrées en avance
+parce qu'elles venaient directement du notebook (model card, prédiction batch).
 """
 
 from pathlib import Path
@@ -13,6 +13,7 @@ from eligibilite_livraison.api.app import create_app
 
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "openapi.yml"
 CURRENT_SESSION = 1
+DELIVERED_IN_ADVANCE = {"getModelCard", "createBatchPredictions"}
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
 
@@ -38,7 +39,10 @@ def _resolve(spec: dict, schema: dict) -> dict:
 def _expected_operations(contract: dict):
     for path, item in contract["paths"].items():
         for method, operation in item.items():
-            if method in HTTP_METHODS and operation.get("x-session", 1) <= CURRENT_SESSION:
+            if method in HTTP_METHODS and (
+                operation.get("x-session", 1) <= CURRENT_SESSION
+                or operation["operationId"] in DELIVERED_IN_ADVANCE
+            ):
                 yield path, method, operation
 
 
@@ -46,7 +50,7 @@ def _operations_ids(contract: dict) -> list[str]:
     return [f"{m.upper()} {p}" for p, m, _ in _expected_operations(contract)]
 
 
-def test_every_session_1_operation_is_implemented(contract, generated):
+def test_every_expected_operation_is_implemented(contract, generated):
     for path, method, operation in _expected_operations(contract):
         assert path in generated["paths"], f"{path} absent de l'API"
         implemented = generated["paths"][path].get(method)
@@ -92,7 +96,18 @@ def test_order_features_schema_matches_contract(contract, generated):
                 assert resolved_actual.get(keyword) == resolved_expected[keyword], (name, keyword)
 
 
-@pytest.mark.parametrize("schema", ["Prediction", "OrderAccepted", "HealthStatus", "Error"])
+@pytest.mark.parametrize(
+    "schema",
+    [
+        "Prediction",
+        "OrderAccepted",
+        "HealthStatus",
+        "Error",
+        "ModelCard",
+        "BatchPredictionRequest",
+        "BatchPredictionResponse",
+    ],
+)
 def test_response_schemas_expose_the_required_fields(contract, generated, schema):
     generated_name = "ErrorResponse" if schema == "Error" else schema
     expected = contract["components"]["schemas"][schema]
@@ -102,3 +117,11 @@ def test_response_schemas_expose_the_required_fields(contract, generated, schema
         name for name, spec in actual["properties"].items() if "default" in spec
     }
     assert set(expected["properties"]) <= set(actual["properties"])
+
+
+def test_protected_operations_declare_the_api_key(generated):
+    """Ajout au contrat (ADR-0007) : toute route /v1 exige l'en-tête X-API-Key."""
+    for path, item in generated["paths"].items():
+        for method, operation in item.items():
+            secured = bool(operation.get("security"))
+            assert secured == path.startswith("/v1"), f"{method.upper()} {path}"
