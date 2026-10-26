@@ -5,12 +5,16 @@
 # Usage :
 #   docker compose --profile train run --rm trainer          # 1. entraîne le modèle
 #   docker compose up -d --build                             # 2. lance proxy + API
+#   APP_VERSION=1.0.0 docker compose up -d                   #    ou : image publiée sur ghcr.io
 #   curl http://localhost:8080/health
 
 services:
   api:
-    build: .
-    image: eligibilite-livraison-express:1.0.0
+    build:
+      context: .
+      target: prod
+    # Image publiée par la CI à chaque release ; « docker compose build » la reconstruit en local.
+    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.0}
     environment:
       APP_ENV: dev
       MODEL_VERSION: "1.0.0"
@@ -44,8 +48,10 @@ services:
 
   trainer:
     profiles: [train]
-    image: eligibilite-livraison-express:1.0.0
-    build: .
+    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.0}
+    build:
+      context: .
+      target: prod
     command: ["express-train"]                   # écrit le modèle dans le volume, puis s'arrête
     environment:
       MODEL_VERSION: "1.0.0"

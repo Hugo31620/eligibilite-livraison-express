@@ -1,12 +1,16 @@
-# Rien d'autre que le code applicatif n'entre dans l'image (ADR-0006).
+# Le contexte de build ne contient que ce qui sert aux étapes build et test.
+# L'étape prod ne copie que les roues : tests, outils et docs n'atteignent jamais l'image finale.
 .git
+.github
+.gitignore
+.dockerignore
 .venv
 venv
 **/__pycache__
+**/*.py[cod]
 *.egg-info
 .pytest_cache
 .ruff_cache
-tests
 docs
 deploy
 notebooks
@@ -16,3 +20,12 @@ data
 secrets
 .env
 .env.*
+*.pem
+*.key
+Dockerfile
+docker-compose*.yml
+CHANGELOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+LICENSE
