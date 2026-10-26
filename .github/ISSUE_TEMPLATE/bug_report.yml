@@ -1,0 +1,48 @@
+name: 🐛 Signaler un bug
+description: Un comportement de l'API ne correspond pas à ce qui est attendu.
+title: "[Bug] "
+labels: ["bug", "à trier"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Une faille de sécurité ? **Ne remplissez pas ce formulaire**, suivez [SECURITY.md](../blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version concernée
+      description: Tag Git, tag de l'image Docker ou champ `version` de `GET /v1/model`.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environnement
+      options: [dev (local), docker compose, test, prod]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      description: Requête envoyée (sans la clé d'API), commande lancée…
+      placeholder: |
+        1. POST /v1/predictions avec le corps ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Résultat attendu
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Résultat obtenu
+      description: Code HTTP, corps de réponse, logs (retirez toute donnée sensible).
+      render: text
+    validations:
+      required: true
