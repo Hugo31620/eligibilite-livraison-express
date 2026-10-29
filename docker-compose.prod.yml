@@ -1,0 +1,116 @@
+# Environnement de PRODUCTION (ADR-0003, ADR-0006, ADR-0007, ADR-0008).
+#
+# Différences avec le test :
+#   - image publiée et VERSION ÉPINGLÉE (APP_VERSION obligatoire), jamais construite ici ;
+#   - MongoDB avec authentification, aucun port publié, compte applicatif à droits minimaux
+#     (lecture de « orders », écriture dans « api_orders » seulement : deploy/mongo/) ;
+#   - pas de simulateur : la collection « orders » est alimentée par l'ETL de l'entreprise ;
+#   - secrets fournis à l'exécution par .env.prod (hors Git, modèle : .env.prod.example) ;
+#   - /docs coupé, conteneurs en lecture seule, sans capacités Linux.
+#
+# Usage :
+#   cp .env.prod.example .env.prod   # puis remplir les secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm trainer
+
+name: livraison-express-prod
+
+x-app: &app
+  image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:?APP_VERSION obligatoire, ex. 1.1.0}
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+x-app-env: &app-env
+  APP_ENV: prod
+  MODEL_VERSION: ${MODEL_VERSION:?MODEL_VERSION obligatoire, ex. 1.0.0}
+  MONGO_URI: mongodb://${MONGO_APP_USER:?}:${MONGO_APP_PASSWORD:?}@mongodb:27017/livraison_express?authSource=livraison_express
+  MONGO_DATABASE: livraison_express
+
+services:
+  mongodb:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?}
+      MONGO_INITDB_DATABASE: livraison_express
+      MONGO_APP_USER: ${MONGO_APP_USER:?}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?}
+    volumes:
+      - mongo_data:/data/db
+      - ./deploy/mongo/init-app-user.js:/docker-entrypoint-initdb.d/01-app-user.js:ro
+    # AUCUN « ports: » : la base n'est joignable que depuis le réseau interne.
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+    restart: unless-stopped
+
+  trainer:
+    <<: *app
+    profiles: [train]
+    command: ["express-train"]
+    healthcheck: { disable: true }         # pas de serveur HTTP dans ce conteneur
+    environment:
+      <<: *app-env
+    volumes:
+      - artifacts:/app/artifacts
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+
+  # Orchestrateur (ADR-0009) : réentraîne quand assez de nouvelles commandes sont arrivées.
+  # Publie une nouvelle version SANS la servir : la mise en service reste une décision humaine.
+  # Prod : une vérification par jour, après le passage de l'ETL.
+  retrainer:
+    <<: *app
+    command: ["express-retrain", "--watch"]
+    healthcheck: { disable: true }         # pas de serveur HTTP dans ce conteneur
+    environment:
+      <<: *app-env
+      RETRAIN_INTERVAL_MINUTES: ${RETRAIN_INTERVAL_MINUTES:-1440}
+      RETRAIN_MIN_NEW_ORDERS: ${RETRAIN_MIN_NEW_ORDERS:-500}
+    volumes:
+      - artifacts:/app/artifacts
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      EXPOSE_API_DOCS: "false"
+    volumes:
+      - artifacts:/app/artifacts:ro
+      - ./secrets/api_keys.json:/run/secrets/api_keys.json:ro
+    expose: ["8000"]
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    depends_on: [api]
+    ports:
+      - "${PROXY_PORT:-8080}:8080"           # le SEUL port ouvert de la machine
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  artifacts:
+
+networks:
+  backend:
