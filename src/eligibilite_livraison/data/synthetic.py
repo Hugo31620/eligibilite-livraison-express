@@ -28,7 +28,7 @@ class SyntheticDatasetSource(DatasetSource):
         n = self._n_rows
         order_date = pd.date_range(start="2025-01-01", end="2025-12-31", periods=n)
         hour = rng.integers(7, 23, size=n)
-        day_of_week = order_date.dayofweek.to_numpy()
+        day_of_week = order_date.day_of_week.to_numpy()
 
         return pd.DataFrame(
             {
