@@ -8,6 +8,16 @@ l'application est indépendante de celle du modèle (`MODEL_VERSION`, ADR-0002).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-29
+
+### Fixed
+
+- Étape `test` de l'image Docker : ruff classait `eligibilite_livraison` en dépendance tierce
+  (pas de `src/` dans l'image) et rejetait l'ordre des imports. Paquets internes déclarés via
+  `known-first-party`.
+- CI : l'action `aquasecurity/trivy-action@0.28.0` n'existe plus ; le scan utilise directement
+  l'image officielle `aquasec/trivy`.
+
 ## [1.0.2] - 2026-10-29
 
 ### Fixed
@@ -60,7 +70,8 @@ Première version publiée : l'application est prête à être livrée sous form
 - Aucun secret ni fichier `.env` dans l'image Docker ; conteneur en lecture seule sans
   capacités Linux.
 
-[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Hugo31620/eligibilite-livraison-express/releases/tag/v1.0.0

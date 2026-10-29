@@ -14,7 +14,7 @@ services:
       context: .
       target: prod
     # Image publiée par la CI à chaque release ; « docker compose build » la reconstruit en local.
-    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.2}
+    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.3}
     environment:
       APP_ENV: dev
       MODEL_VERSION: "1.0.0"
@@ -48,7 +48,7 @@ services:
 
   trainer:
     profiles: [train]
-    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.2}
+    image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.0.3}
     build:
       context: .
       target: prod
