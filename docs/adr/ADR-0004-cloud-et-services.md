@@ -1,6 +1,6 @@
 # ADR-0004 — Cloud, on-premise ou local ? Et quels services cloud ?
 
-**Status :** Accepté
+**Status :** Accepté ; ligne « Commandes » remplacée par [ADR-0008](ADR-0008-source-donnees-erp-mongodb.md) (Azure Cosmos DB for MongoDB)
 **Date :** 09/10/2026
 
 ## Contexte

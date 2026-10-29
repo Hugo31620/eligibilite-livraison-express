@@ -1,0 +1,149 @@
+# Environnement de TEST (ADR-0008) : l'application branchée sur la base analytique MongoDB,
+# alimentée par le simulateur ERP fourni (erp/). Données fictives uniquement.
+#
+#   simulateur ERP ──► postgres (prod ERP, jamais lue par l'app)
+#                 └──► mongodb (base analytique) ──► trainer (express-train)
+#                                                └──► api ◄── proxy :8081 ◄── vous
+#
+# Usage (depuis la racine du dépôt) :
+#   express-apikey create --name testeur --role admin --days 7   # crée secrets/api_keys.json
+#   docker compose -f docker-compose.test.yml up -d --build      # bases + ERP + API + proxy
+#   docker compose -f docker-compose.test.yml logs -f erp-simulator   # attendre l'historique
+#   docker compose -f docker-compose.test.yml run --rm trainer   # entraîne sur les données ERP
+#   docker compose -f docker-compose.test.yml logs -f retrainer  # réentraînement automatique
+#   curl http://localhost:8081/health/ready
+#   docker compose -f docker-compose.test.yml down -v            # tout supprimer, données comprises
+
+name: livraison-express-test
+
+x-app: &app
+  build:
+    context: .
+    target: prod
+  image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.1.0}
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+x-app-env: &app-env
+  APP_ENV: test
+  MODEL_VERSION: ${MODEL_VERSION:-1.0.0}
+  # Base de test sans mot de passe, sur un réseau interne : jamais d'URI de prod ici.
+  MONGO_URI: mongodb://mongodb:27017
+  MONGO_DATABASE: livraison_express
+
+services:
+  # ─────────── Systèmes externes simulés (fournis par l'intervenant, erp/) ───────────
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: livraison_express
+      POSTGRES_USER: livraison
+      POSTGRES_PASSWORD: livraison           # identifiants fictifs du sujet, base de test
+    volumes:
+      - erp_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U livraison -d livraison_express"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [erp]                          # l'application n'a AUCUNE route vers la prod ERP
+
+  mongodb:
+    image: mongo:8
+    volumes:
+      - erp_mongo:/data/db
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27018}:27017"   # inspection locale seulement (Compass, pytest)
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [erp, backend]
+
+  erp-simulator:
+    build: ./erp
+    environment:
+      POSTGRES_DSN: postgresql://livraison:livraison@postgres:5432/livraison_express
+      MONGO_URI: mongodb://mongodb:27017
+      BATCH_SIZE: ${BATCH_SIZE:-5}
+      INTERVAL_SECONDS: ${INTERVAL_SECONDS:-5}
+      POSTGRES_HISTORY_ORDERS: ${POSTGRES_HISTORY_ORDERS:-2000}
+      RECENT_HISTORY_ORDERS: ${RECENT_HISTORY_ORDERS:-1000}
+      LIVE_ORDER_LIMIT: ${LIVE_ORDER_LIMIT:-0}
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongodb: { condition: service_healthy }
+    networks: [erp]
+
+  # ─────────────────────────────── Application ───────────────────────────────
+  trainer:
+    <<: *app
+    profiles: [train]                        # lancé à la demande ou par l'orchestrateur
+    command: ["express-train"]
+    healthcheck: { disable: true }         # pas de serveur HTTP dans ce conteneur
+    environment:
+      <<: *app-env
+    volumes:
+      - artifacts:/app/artifacts
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+
+  # Orchestrateur (ADR-0009) : réentraîne quand assez de nouvelles commandes sont arrivées.
+  # Publie une nouvelle version SANS la servir : la mise en service reste une décision humaine.
+  # Test : vérification rapide pour voir le réentraînement pendant la démo.
+  retrainer:
+    <<: *app
+    command: ["express-retrain", "--watch"]
+    healthcheck: { disable: true }         # pas de serveur HTTP dans ce conteneur
+    environment:
+      <<: *app-env
+      RETRAIN_INTERVAL_MINUTES: ${RETRAIN_INTERVAL_MINUTES:-2}
+      RETRAIN_MIN_NEW_ORDERS: ${RETRAIN_MIN_NEW_ORDERS:-100}
+    volumes:
+      - artifacts:/app/artifacts
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      EXPOSE_API_DOCS: "true"                # /docs autorisé en test, jamais en prod
+    volumes:
+      - artifacts:/app/artifacts:ro
+      - ./secrets/api_keys.json:/run/secrets/api_keys.json:ro
+    expose: ["8000"]
+    depends_on:
+      mongodb: { condition: service_healthy }
+    networks: [backend]
+    restart: unless-stopped
+
+  proxy:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    depends_on: [api]
+    ports:
+      - "${PROXY_PORT:-8081}:8080"           # 8081 : ne gêne pas un autre service sur 8080
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+volumes:
+  erp_postgres:
+  erp_mongo:
+  artifacts:
+
+networks:
+  erp:
+  backend:

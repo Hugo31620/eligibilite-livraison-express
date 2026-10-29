@@ -1,6 +1,6 @@
 # ADR-0001 — Où stocker les commandes clients collectées
 
-**Status :** Accepté
+**Status :** Accepté pour le dev ; remplacé pour test et prod par [ADR-0008](ADR-0008-source-donnees-erp-mongodb.md) (MongoDB)
 **Date :** 06/10/2026
 
 ## Contexte
