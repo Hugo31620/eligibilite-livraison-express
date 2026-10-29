@@ -8,6 +8,14 @@ l'application est indépendante de celle du modèle (`MODEL_VERSION`, ADR-0002).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-29
+
+### Fixed
+
+- CI : le service MongoDB des tests ne démarrait pas (commande de santé mal interprétée par
+  le runner GitHub Actions). Le contrôle de santé du service est remplacé par une étape qui
+  attend explicitement que MongoDB réponde avant de lancer pytest.
+
 ## [1.1.0] - 2026-10-29
 
 ### Added
@@ -101,7 +109,8 @@ Première version publiée : l'application est prête à être livrée sous form
 - Aucun secret ni fichier `.env` dans l'image Docker ; conteneur en lecture seule sans
   capacités Linux.
 
-[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...v1.0.2

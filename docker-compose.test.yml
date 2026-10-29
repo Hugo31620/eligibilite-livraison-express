@@ -20,7 +20,7 @@ x-app: &app
   build:
     context: .
     target: prod
-  image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.1.0}
+  image: ghcr.io/hugo31620/eligibilite-livraison-express:${APP_VERSION:-1.1.1}
   read_only: true
   tmpfs: [/tmp]
   cap_drop: [ALL]
