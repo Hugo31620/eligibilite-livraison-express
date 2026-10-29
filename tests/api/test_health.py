@@ -1,10 +1,13 @@
+from eligibilite_livraison import __version__
+
+
 def test_health_is_alive(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
         "service": "eligibilite-livraison-express",
-        "version": "1.0.0",
+        "version": __version__,
     }
 
 
