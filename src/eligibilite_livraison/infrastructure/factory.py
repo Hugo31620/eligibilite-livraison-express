@@ -8,8 +8,8 @@ from eligibilite_livraison.abstractions.model_repository import ModelRepository
 from eligibilite_livraison.abstractions.order_store import OrderStore
 from eligibilite_livraison.config import Settings
 from eligibilite_livraison.domain.errors import ConfigurationError
-from eligibilite_livraison.infrastructure.dev.json_file_api_key_store import JsonFileApiKeyStore
 from eligibilite_livraison.infrastructure.dev.file_model_repository import FileModelRepository
+from eligibilite_livraison.infrastructure.dev.json_file_api_key_store import JsonFileApiKeyStore
 from eligibilite_livraison.infrastructure.dev.sqlite_order_store import SqliteOrderStore
 
 

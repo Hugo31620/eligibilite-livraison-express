@@ -52,7 +52,7 @@ class EligibilityPredictor:
         latency_ms = round((time.perf_counter() - started) * 1000 / len(orders), 3)
         return [
             self._to_prediction(order, float(probability), predicted_at, latency_ms)
-            for order, probability in zip(orders, probabilities)
+            for order, probability in zip(orders, probabilities, strict=True)
         ]
 
     def _to_prediction(
