@@ -43,7 +43,8 @@ jobs:
         image: mongo:8
         ports: ["27017:27017"]
     env:
-      MONGO_TEST_URI: mongodb://localhost:27017
+      # 127.0.0.1 et non localhost : sur le runner, localhost peut se résoudre en ::1 (IPv6).
+      MONGO_TEST_URI: mongodb://127.0.0.1:27017
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,7 +61,7 @@ jobs:
           python - <<'PY'
           import time
           from pymongo import MongoClient
-          client = MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
+          client = MongoClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
           for attempt in range(30):
               try:
                   client.admin.command("ping")
@@ -71,6 +72,11 @@ jobs:
           else:
               raise SystemExit("MongoDB injoignable après 60 s")
           PY
+      - name: Diagnostic du service MongoDB
+        if: failure()
+        run: |
+          docker ps -a
+          docker logs --tail 80 "${{ job.services.mongodb.id }}" || true
       - name: Lancer pytest
         run: pytest -q --junitxml=pytest-report.xml
       - name: Publier le rapport de tests

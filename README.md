@@ -56,7 +56,7 @@ Configuration par variables d'environnement (voir `.env.example`) : `APP_ENV`, `
 Chaque version taggée est publiée sur le GitHub Container Registry :
 
 ```bash
-docker pull ghcr.io/hugo31620/eligibilite-livraison-express:1.1.1
+docker pull ghcr.io/hugo31620/eligibilite-livraison-express:1.1.2
 ```
 
 ### Avec Docker (topologie de production, ADR-0003 et ADR-0006)
