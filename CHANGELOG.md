@@ -8,6 +8,16 @@ l'application est indépendante de celle du modèle (`MODEL_VERSION`, ADR-0002).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-29
+
+### Fixed
+
+- Le package `src/eligibilite_livraison/data/` (`quality.py`, `synthetic.py`) était exclu de Git
+  par la règle `data/` du `.gitignore`, qui visait seulement le dossier de données à la racine :
+  la CI et l'image Docker échouaient à l'import. Règles ancrées à la racine (`/data/`,
+  `/artifacts/`) et package ajouté au dépôt.
+- Tri des imports (ruff I001) et `zip(..., strict=True)` dans `predict_many` (ruff B905).
+
 ## [1.0.0] - 2026-10-26
 
 Première version publiée : l'application est prête à être livrée sous forme d'image Docker.
@@ -42,5 +52,6 @@ Première version publiée : l'application est prête à être livrée sous form
 - Aucun secret ni fichier `.env` dans l'image Docker ; conteneur en lecture seule sans
   capacités Linux.
 
-[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Hugo31620/eligibilite-livraison-express/releases/tag/v1.0.0

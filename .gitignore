@@ -8,8 +8,8 @@ venv/
 .env
 
 # Artefacts générés (cf. ADR-0002) et données locales (cf. ADR-0001)
-artifacts/
-data/
+/artifacts/
+/data/
 
 # Secrets : empreintes des clés d'API (ADR-0007). Jamais dans Git.
 secrets/
