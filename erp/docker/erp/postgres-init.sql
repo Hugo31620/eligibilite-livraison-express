@@ -1,0 +1,2 @@
+-- Le schéma est créé par le simulateur ERP (storage.py) : rien à initialiser ici.
+-- Fichier attendu par docker-compose.erp.yml, absent de l'archive fournie.
