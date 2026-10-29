@@ -42,9 +42,6 @@ jobs:
       mongodb:
         image: mongo:8
         ports: ["27017:27017"]
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       MONGO_TEST_URI: mongodb://localhost:27017
     steps:
@@ -58,6 +55,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+      - name: Attendre que MongoDB réponde
+        run: |
+          python - <<'PY'
+          import time
+          from pymongo import MongoClient
+          client = MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
+          for attempt in range(30):
+              try:
+                  client.admin.command("ping")
+                  print(f"MongoDB prêt après {attempt * 2} s")
+                  break
+              except Exception:
+                  time.sleep(2)
+          else:
+              raise SystemExit("MongoDB injoignable après 60 s")
+          PY
       - name: Lancer pytest
         run: pytest -q --junitxml=pytest-report.xml
       - name: Publier le rapport de tests
