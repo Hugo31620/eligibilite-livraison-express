@@ -10,6 +10,22 @@ from eligibilite_livraison.domain.errors import InvalidModelVersionError
 _VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+")
 
 
+def is_model_version(value: str) -> bool:
+    return bool(_VERSION_PATTERN.fullmatch(value))
+
+
+def version_key(version: str) -> tuple[int, int, int]:
+    """Clé de tri numérique : 1.10.0 vient bien après 1.9.0."""
+    major, minor, patch = ensure_valid_model_version(version).split(".")
+    return int(major), int(minor), int(patch)
+
+
+def next_minor_version(version: str) -> str:
+    """Version suivante pour un réentraînement : même contrat de variables, nouvelles données."""
+    major, minor, _ = version_key(version)
+    return f"{major}.{minor + 1}.0"
+
+
 def ensure_valid_model_version(version: str) -> str:
     """Impose un format X.Y.Z : la version sert aussi de nom de dossier (ADR-0002)."""
     if not _VERSION_PATTERN.fullmatch(version):

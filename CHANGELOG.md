@@ -8,6 +8,37 @@ l'application est indépendante de celle du modèle (`MODEL_VERSION`, ADR-0002).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-29
+
+### Added
+
+- **Séance 4 — données réelles et orchestration**
+  - Intégration des commandes de l'ERP depuis la base analytique **MongoDB** (ADR-0008).
+  - `MongoOrderStore` (`save`, `get`, `get_all`) pour les commandes reçues par l'API
+    (collection `api_orders`) et `MongoErpDatasetSource` en lecture seule (collection `orders`).
+  - Couche anti-corruption `infrastructure/erp/translation.py` : traduction du vocabulaire et
+    des unités de l'ERP, rejet et comptage des valeurs inconnues.
+  - Environnements `test` et `prod` (`APP_ENV`) et fichiers `docker-compose.test.yml`
+    (simulateur ERP fourni dans `erp/`) et `docker-compose.prod.yml` (authentification MongoDB,
+    compte applicatif à droits minimaux, secrets dans `.env.prod`).
+  - Orchestrateur de réentraînement `express-retrain [--watch]` et service `retrainer`
+    (ADR-0009) : nouvelle version mineure publiée, jamais servie automatiquement.
+  - `OrderStore.get_all` et `ModelReader.list_versions`.
+  - CI : tests de contrat et d'entraînement sur un vrai MongoDB, validation des fichiers compose.
+
+### Changed
+
+- La règle métier d'étiquetage est extraite dans `data/labeling.py`, partagée par le jeu
+  synthétique (résultat identique) et la source ERP.
+- `express-train` entraîne sur la source de l'environnement : synthétique en dev, ERP en
+  test et en prod. `--rows` ne concerne plus que le dev.
+- ADR-0001 et ADR-0004 : stockage des commandes en test et en prod remplacé par l'ADR-0008.
+
+### Security
+
+- L'URI MongoDB (mot de passe) n'apparaît jamais dans la représentation des réglages.
+- L'application refuse de démarrer si sa collection d'écriture est celle de l'ERP.
+
 ## [1.0.3] - 2026-10-29
 
 ### Fixed
@@ -70,7 +101,8 @@ Première version publiée : l'application est prête à être livrée sous form
 - Aucun secret ni fichier `.env` dans l'image Docker ; conteneur en lecture seule sans
   capacités Linux.
 
-[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.0...v1.0.1

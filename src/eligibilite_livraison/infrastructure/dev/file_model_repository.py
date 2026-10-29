@@ -23,6 +23,8 @@ from eligibilite_livraison.domain.model_artifact import (
     ModelArtifact,
     ModelMetadata,
     ensure_valid_model_version,
+    is_model_version,
+    version_key,
 )
 
 MODEL_FILENAME = "model.joblib"
@@ -77,6 +79,18 @@ class FileModelRepository(ModelRepository):
                 f"Artefact du modèle {version} illisible : {error}"
             ) from error
         return ModelArtifact(pipeline=pipeline, metadata=metadata)
+
+    def list_versions(self) -> list[str]:
+        if not self._root.is_dir():
+            return []
+        versions = [
+            directory.name
+            for directory in self._root.iterdir()
+            if directory.is_dir()
+            and is_model_version(directory.name)  # ignore les dossiers .X.Y.Z.tmp
+            and (directory / METADATA_FILENAME).is_file()
+        ]
+        return sorted(versions, key=version_key)
 
     def _version_dir(self, version: str) -> Path:
         # La version devient un nom de dossier : le format X.Y.Z interdit "../" et consorts.

@@ -15,6 +15,10 @@ class ModelReader(ABC):
             ModelUnavailableError: l'artefact est illisible ou corrompu.
         """
 
+    @abstractmethod
+    def list_versions(self) -> list[str]:
+        """Versions publiées, de la plus ancienne à la plus récente (ordre X.Y.Z)."""
+
 
 class ModelWriter(ABC):
     """Écriture des artefacts : réservée à l'entraînement."""

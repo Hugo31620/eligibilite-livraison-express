@@ -12,6 +12,8 @@ TP « Industrialisation de l'IA dans le cloud » (YNOV M2 Data & IA) :
   déploiement.
 - **Séance 3** : CI/CD (GitHub Actions), GitFlow, image Docker multi-stage publiée sur
   `ghcr.io`, fichiers de collaboration.
+- **Séance 4** : données réelles de l'ERP via MongoDB, environnements Docker de test et de
+  prod, orchestration du réentraînement.
 
 Le notebook d'origine (`project_test_v1_final_final2.ipynb`) génère des données, les nettoie,
 entraîne une régression logistique et prédit. Ici, chaque responsabilité a son module, son
@@ -54,7 +56,7 @@ Configuration par variables d'environnement (voir `.env.example`) : `APP_ENV`, `
 Chaque version taggée est publiée sur le GitHub Container Registry :
 
 ```bash
-docker pull ghcr.io/hugo31620/eligibilite-livraison-express:1.0.3
+docker pull ghcr.io/hugo31620/eligibilite-livraison-express:1.1.0
 ```
 
 ### Avec Docker (topologie de production, ADR-0003 et ADR-0006)
@@ -68,6 +70,35 @@ curl http://localhost:8080/health
 
 Seul le port **8080** du proxy est ouvert. L'API (8000) n'est joignable que depuis le
 réseau interne. `/docs` et `/openapi.json` n'existent pas.
+
+### Environnement de test : données de l'ERP (ADR-0008, ADR-0009)
+
+MongoDB (base analytique), le simulateur ERP fourni (`erp/`), l'API, le proxy et
+l'orchestrateur de réentraînement :
+
+```powershell
+express-apikey create --name testeur --role admin --days 7     # crée secrets/api_keys.json
+docker compose -f docker-compose.test.yml up -d --build        # tout démarre ; proxy sur :8081
+docker compose -f docker-compose.test.yml logs erp-simulator   # attendre « Historique partagé 2023+ »
+docker compose -f docker-compose.test.yml run --rm trainer     # entraîne le modèle 1.0.0 sur l'ERP
+curl.exe http://localhost:8081/health/ready                    # {"status":"ready", ...}
+docker compose -f docker-compose.test.yml logs -f retrainer    # publie 1.1.0, 1.2.0... au fil des lots
+docker compose -f docker-compose.test.yml down -v              # tout supprimer
+```
+
+### Environnement de production
+
+Image épinglée, MongoDB avec authentification et compte applicatif à droits minimaux
+(`deploy/mongo/init-app-user.js`), aucun port publié hormis le proxy, secrets dans
+`.env.prod` (hors Git) :
+
+```powershell
+Copy-Item .env.prod.example .env.prod                           # puis remplir les secrets
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm trainer
+```
+
+En prod, la collection `orders` est alimentée par l'ETL de l'entreprise, pas par le simulateur.
 
 ## Sécurité et rôles (ADR-0006, ADR-0007)
 
@@ -122,8 +153,20 @@ réseau interne. `/docs` et `/openapi.json` n'existent pas.
 | Tests automatiques | [`ci.yml`](.github/workflows/ci.yml) sur chaque push / PR : ruff, pytest sur Python 3.10 → 3.13, `pip-audit`, construction et exécution de l'étape `test`, scan Trivy de l'image `prod` |
 | Image à chaque release | [`release.yml`](.github/workflows/release.yml) : tag `vX.Y.Z` → tests dans l'image → publication `ghcr.io/hugo31620/eligibilite-livraison-express:X.Y.Z` (+ `X.Y`, `latest`) |
 
-Volontairement **non fait** (YAGNI) : déploiement continu vers Azure, adaptateurs Azure (`PostgresOrderStore`,
-`BlobModelRepository`), MLflow, historique des prédictions, flux temps réel, `/metrics`.
+## Ce qui est livré (séance 4)
+
+| Élément | Solution technique |
+|---|---|
+| Choix de la base | **MongoDB** (base analytique) plutôt que PostgreSQL (production de l'ERP, partagée avec une application critique, sans administrateur) ([ADR-0008](docs/adr/ADR-0008-source-donnees-erp-mongodb.md)) |
+| Implémentation de `OrderRepository` | `MongoOrderStore` (`save`, `get`, `get_all`) pour les commandes reçues par l'API, dans la collection `api_orders` ; `MongoErpDatasetSource` lit la collection `orders` de l'ERP **sans jamais l'écrire** |
+| Validation des données depuis l'application | Couche anti-corruption `infrastructure/erp/translation.py` : vocabulaire et unités de l'ERP traduits vers ceux du domaine, valeurs inconnues **rejetées et comptées**, puis nettoyage et validation habituels |
+| Cible absente de l'ERP | Étiquetage par la règle métier du notebook (`data/labeling.py`), limite documentée dans l'ADR-0008 |
+| Tests sur les nouvelles données | Traduction, source, entraînement puis prédiction sur des commandes au format ERP ; contrat `OrderStore` rejoué sur SQLite, `mongomock` et un **vrai MongoDB** (service `mongodb` de la CI) |
+| docker-compose de test et de prod | [`docker-compose.test.yml`](docker-compose.test.yml) (simulateur ERP, MongoDB ouvert en local) et [`docker-compose.prod.yml`](docker-compose.prod.yml) (authentification, moindre privilège, secrets, image épinglée) |
+| Orchestrateur de réentraînement | `express-retrain --watch` (service `retrainer`) : réentraîne au-delà de `RETRAIN_MIN_NEW_ORDERS` nouvelles commandes et publie la version mineure suivante **sans la servir** ([ADR-0009](docs/adr/ADR-0009-orchestration-reentrainement.md)) |
+
+Volontairement **non fait** (YAGNI) : déploiement continu vers Azure, Airflow (une seule tâche,
+voir ADR-0009), `BlobModelRepository`, MLflow, historique des prédictions, flux temps réel, `/metrics`.
 La « mise en file d'attente » de `POST /v1/orders` n'est pas implémentée : la commande est
 persistée et acceptée (202) ; la file arrive avec le batch / temps réel (séances 5 et 6).
 
@@ -135,15 +178,18 @@ src/eligibilite_livraison/
 ├── abstractions/      # Ports (ABC) : OrderStore, ModelReader/Writer, DatasetSource, ApiKeyStore
 ├── infrastructure/
 │   ├── dev/           # Adaptateurs locaux : SqliteOrderStore, FileModelRepository, JsonFileApiKeyStore
-│   └── factory.py     # Choix des adaptateurs selon APP_ENV  (futur : postgres/, ...)
-├── data/              # SyntheticDatasetSource, règles qualité + nettoyage
-├── ml/                # Pipeline sklearn, métriques, TrainingService
+│   ├── erp/           # Couche anti-corruption : format de l'ERP → vocabulaire du domaine
+│   ├── mongo/         # Test / prod : MongoOrderStore, MongoErpDatasetSource
+│   └── factory.py     # Choix des adaptateurs selon APP_ENV (dev → SQLite, test / prod → MongoDB)
+├── data/              # SyntheticDatasetSource, étiquetage métier, règles qualité + nettoyage
+├── ml/                # Pipeline sklearn, métriques, TrainingService, RetrainingService
 ├── services/          # EligibilityPredictor, PredictorProvider, OrderCollectionService,
 │                      # AuthenticationService, model card
 ├── api/               # App FastAPI, routes, schémas, erreurs, contrôle d'accès (security.py)
 ├── container.py       # Racine de composition (assemble les briques)
 ├── config.py          # Settings depuis l'environnement
 ├── cli.py             # express-train
+├── retrain_cli.py     # express-retrain [--watch]  (orchestrateur, ADR-0009)
 └── apikey_cli.py      # express-apikey create / list / revoke
 ```
 
@@ -205,10 +251,12 @@ connaît `domain`. L'API et les services ne savent jamais qu'il y a SQLite ou un
 | [0005](docs/adr/ADR-0005-strategie-de-deploiement.md) | Stratégie Blue/Green, rollback instantané |
 | [0006](docs/adr/ADR-0006-securiser-entrees-sorties.md) | Sécurité des entrées et sorties : défense en profondeur |
 | [0007](docs/adr/ADR-0007-securiser-acces-aux-donnees.md) | Accès à la donnée : rôles et clés d'API |
+| [0008](docs/adr/ADR-0008-source-donnees-erp-mongodb.md) | Données de l'ERP depuis MongoDB (base analytique) plutôt que PostgreSQL (production) |
+| [0009](docs/adr/ADR-0009-orchestration-reentrainement.md) | Réentraînement planifié par `express-retrain`, mise en service manuelle |
 
 ## Tests
 
-`pytest` lance 169 tests :
+`pytest` lance 229 tests :
 
 - validation du contrat de commande et qualité des données ;
 - entraînement de bout en bout et adaptateurs de stockage ;
@@ -216,7 +264,12 @@ connaît `domain`. L'API et les services ne savent jamais qu'il y a SQLite ou un
 - API : succès, 401, 403, 404, 422, 503 et 500 ;
 - matrice complète **rôle × route** ;
 - model card et batch ;
-- **conformité de l'API générée avec `openapi.yml`** (`tests/api/test_contract.py`).
+- **conformité de l'API générée avec `openapi.yml`** (`tests/api/test_contract.py`) ;
+- traduction des données ERP, entraînement et prédiction sur ces données, réentraînement ;
+- contrat `OrderStore` sur SQLite, MongoDB en mémoire (`mongomock`) et vrai MongoDB.
+
+Les tests sur un vrai MongoDB ne tournent que si `MONGO_TEST_URI` est défini (CI, ou en local
+avec le compose de test : `$env:MONGO_TEST_URI="mongodb://localhost:27018"; pytest`).
 
 Qualité du code : `ruff check .`
 
