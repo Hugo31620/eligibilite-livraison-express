@@ -41,6 +41,7 @@ _INSERT = (
     f"VALUES ({', '.join(f':{column}' for column in _COLUMNS)}, :created_at)"
 )
 _SELECT = f"SELECT {', '.join(_COLUMNS)} FROM orders WHERE order_id = ?"
+_SELECT_ALL = f"SELECT {', '.join(_COLUMNS)} FROM orders ORDER BY created_at, rowid"
 
 
 class SqliteOrderStore(OrderStore):
@@ -78,6 +79,11 @@ class SqliteOrderStore(OrderStore):
         if row is None:
             raise OrderNotFoundError(f"Commande inconnue : {order_id}")
         return OrderFeatures(**dict(row))
+
+    def get_all(self) -> list[OrderFeatures]:
+        with self._connect() as connection:
+            rows = connection.execute(_SELECT_ALL).fetchall()
+        return [OrderFeatures(**dict(row)) for row in rows]
 
     def is_reachable(self) -> bool:
         try:

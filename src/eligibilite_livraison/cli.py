@@ -5,9 +5,9 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 
 from eligibilite_livraison.config import Settings
-from eligibilite_livraison.data.synthetic import SyntheticDatasetSource
 from eligibilite_livraison.domain.errors import DomainError
 from eligibilite_livraison.infrastructure.factory import build_infrastructure
 from eligibilite_livraison.ml.training import TrainingService
@@ -16,13 +16,15 @@ from eligibilite_livraison.ml.training import TrainingService
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="express-train",
-        description="Entraîne le modèle d'éligibilité express et l'enregistre (ADR-0002).",
+        description="Entraîne le modèle d'éligibilité express (ADR-0002, ADR-0008).",
     )
     parser.add_argument(
         "--model-version", help="Version X.Y.Z à publier (défaut : variable MODEL_VERSION)."
     )
     parser.add_argument(
-        "--rows", type=int, default=6000, help="Taille du jeu synthétique (défaut : 6000)."
+        "--rows",
+        type=int,
+        help="Dev uniquement : taille du jeu synthétique (défaut : SYNTHETIC_ROWS ou 6000).",
     )
     return parser.parse_args(argv)
 
@@ -32,10 +34,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         settings = Settings.from_env()
-        service = TrainingService(
-            SyntheticDatasetSource(n_rows=args.rows),
-            build_infrastructure(settings).model_repository,
-        )
+        if args.rows is not None:
+            settings = replace(settings, synthetic_rows=args.rows)
+        # Dev : jeu synthétique ; test / prod : commandes de l'ERP (ADR-0008).
+        infrastructure = build_infrastructure(settings)
+        service = TrainingService(infrastructure.dataset_source, infrastructure.model_repository)
         metadata = service.run(args.model_version or settings.model_version)
     except DomainError as error:
         print(f"Erreur : {error}", file=sys.stderr)

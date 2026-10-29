@@ -4,7 +4,7 @@ from eligibilite_livraison.domain.order import OrderFeatures
 
 
 class OrderStore(ABC):
-    """Stockage des commandes clients collectées (cf. ADR-0001)."""
+    """Stockage des commandes clients collectées (cf. ADR-0001, ADR-0008)."""
 
     @abstractmethod
     def save(self, order: OrderFeatures) -> None:
@@ -22,6 +22,10 @@ class OrderStore(ABC):
         Raises:
             OrderNotFoundError: l'identifiant est inconnu.
         """
+
+    @abstractmethod
+    def get_all(self) -> list[OrderFeatures]:
+        """Toutes les commandes collectées, de la plus ancienne à la plus récente."""
 
     @abstractmethod
     def is_reachable(self) -> bool:
