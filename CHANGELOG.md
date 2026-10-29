@@ -8,6 +8,14 @@ l'application est indépendante de celle du modèle (`MODEL_VERSION`, ADR-0002).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-29
+
+### Fixed
+
+- Compatibilité pandas 3 : `DatetimeIndex.dayofweek` (déprécié, `Pandas4Warning`) remplacé par
+  `day_of_week` dans la génération des données synthétiques. Les tests échouaient sur
+  Python 3.11+ où la CI installe pandas 3.
+
 ## [1.0.1] - 2026-10-29
 
 ### Fixed
@@ -52,6 +60,7 @@ Première version publiée : l'application est prête à être livrée sous form
 - Aucun secret ni fichier `.env` dans l'image Docker ; conteneur en lecture seule sans
   capacités Linux.
 
-[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Hugo31620/eligibilite-livraison-express/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Hugo31620/eligibilite-livraison-express/releases/tag/v1.0.0
