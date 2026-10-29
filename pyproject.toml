@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eligibilite-livraison-express"
-version = "1.0.2"
+version = "1.0.3"
 description = "API de prédiction d'éligibilité à la livraison express (TP Industrialisation de l'IA - M2 YNOV)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,3 +44,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "C4", "PT"]
+
+[tool.ruff.lint.isort]
+# Explicite : dans l'image Docker de test, src/ est absent (seule la roue est installée).
+known-first-party = ["eligibilite_livraison", "tests"]
