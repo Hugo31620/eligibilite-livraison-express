@@ -1,11 +1,17 @@
 # eligibilite-livraison-express
 
+[![CI](https://github.com/Hugo31620/eligibilite-livraison-express/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Hugo31620/eligibilite-livraison-express/actions/workflows/ci.yml)
+[![Release](https://github.com/Hugo31620/eligibilite-livraison-express/actions/workflows/release.yml/badge.svg)](https://github.com/Hugo31620/eligibilite-livraison-express/actions/workflows/release.yml)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 API qui prédit si une commande peut être **livrée en express dans la journée**.
 TP « Industrialisation de l'IA dans le cloud » (YNOV M2 Data & IA) :
 
 - **Séance 1** : transformer le notebook en application.
 - **Séance 2** : finir l'application, sécuriser l'accès par rôles et rédiger les ADR de
   déploiement.
+- **Séance 3** : CI/CD (GitHub Actions), GitFlow, image Docker multi-stage publiée sur
+  `ghcr.io`, fichiers de collaboration.
 
 Le notebook d'origine (`project_test_v1_final_final2.ipynb`) génère des données, les nettoie,
 entraîne une régression logistique et prédit. Ici, chaque responsabilité a son module, son
@@ -42,6 +48,14 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8000/v1/predictions -Header
 
 Configuration par variables d'environnement (voir `.env.example`) : `APP_ENV`, `MODEL_VERSION`,
 `ARTIFACTS_DIR`, `ORDERS_DB_PATH`, `PREDICTION_THRESHOLD`, `API_KEYS_FILE`, `EXPOSE_API_DOCS`.
+
+### Image publiée (sans cloner le dépôt)
+
+Chaque version taggée est publiée sur le GitHub Container Registry :
+
+```bash
+docker pull ghcr.io/hugo31620/eligibilite-livraison-express:1.0.0
+```
 
 ### Avec Docker (topologie de production, ADR-0003 et ADR-0006)
 
@@ -96,7 +110,19 @@ réseau interne. `/docs` et `/openapi.json` n'existent pas.
 | Cloud / on-premise / local | Local en dev, Azure (France Central) en test et prod ([ADR-0004](docs/adr/ADR-0004-cloud-et-services.md)) |
 | Stratégie de déploiement | Blue/Green par révisions Azure Container Apps ([ADR-0005](docs/adr/ADR-0005-strategie-de-deploiement.md)) |
 
-Volontairement **non fait** (YAGNI) : CI/CD, adaptateurs Azure (`PostgresOrderStore`,
+## Ce qui est livré (séance 3)
+
+| Élément | Solution technique |
+|---|---|
+| Projet sur GitHub, GitFlow | Branches `main` (production, taggée), `develop`, `feature/*`, `release/*`, `hotfix/*` ([CONTRIBUTING](CONTRIBUTING.md#organisation-des-branches-gitflow)) |
+| Versions et journal | Semantic Versioning (`v1.0.0`) et [CHANGELOG](CHANGELOG.md) au format Keep a Changelog |
+| Collaboration | [CONTRIBUTING](CONTRIBUTING.md), [LICENSE](LICENSE) (MIT), [SECURITY](SECURITY.md), [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md), modèles d'issues et de PR |
+| Image Docker optimisée | Build multi-stage : `build` (roues) → `test` (pytest + ruff dans l'image) → `prod` (slim, sans tests, outils, `.env`, doc ni README) |
+| Image Docker sécurisée | Utilisateur non-root (uid 10001), secrets passés à l'exécution, seul le port 8000 exposé (vers le proxy) |
+| Tests automatiques | [`ci.yml`](.github/workflows/ci.yml) sur chaque push / PR : ruff, pytest sur Python 3.10 → 3.13, `pip-audit`, construction et exécution de l'étape `test`, scan Trivy de l'image `prod` |
+| Image à chaque release | [`release.yml`](.github/workflows/release.yml) : tag `vX.Y.Z` → tests dans l'image → publication `ghcr.io/hugo31620/eligibilite-livraison-express:X.Y.Z` (+ `X.Y`, `latest`) |
+
+Volontairement **non fait** (YAGNI) : déploiement continu vers Azure, adaptateurs Azure (`PostgresOrderStore`,
 `BlobModelRepository`), MLflow, historique des prédictions, flux temps réel, `/metrics`.
 La « mise en file d'attente » de `POST /v1/orders` n'est pas implémentée : la commande est
 persistée et acceptée (202) ; la file arrive avec le batch / temps réel (séances 5 et 6).
@@ -193,3 +219,14 @@ connaît `domain`. L'API et les services ne savent jamais qu'il y a SQLite ou un
 - **conformité de l'API générée avec `openapi.yml`** (`tests/api/test_contract.py`).
 
 Qualité du code : `ruff check .`
+
+Les mêmes vérifications tournent dans l'image : `docker build --target test .`
+
+## Contribuer
+
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) (branches, commits, versions, PR) et
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Vulnérabilité : [SECURITY.md](SECURITY.md).
+
+## Licence
+
+[MIT](LICENSE) © 2026 Hugo31620

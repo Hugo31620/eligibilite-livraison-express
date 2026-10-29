@@ -1,0 +1,29 @@
+name: ✨ Proposer une évolution
+description: Une nouvelle fonctionnalité ou une amélioration.
+title: "[Évolution] "
+labels: ["évolution", "à trier"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin
+      description: Quel problème métier ou technique cela résout-il ? Pour qui ?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution envisagée
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives écartées
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - label: Modifie le contrat `openapi.yml` (version majeure si non rétrocompatible)
+        - label: Nécessite une nouvelle ADR
